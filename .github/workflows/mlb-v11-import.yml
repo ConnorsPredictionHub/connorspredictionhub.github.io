@@ -1,0 +1,52 @@
+name: MLB V1.1 Historical Import
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Completed MLB season (2010 onwards)"
+        required: true
+        default: "2025"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mlb-v11-historical-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout development code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify required credentials
+        env:
+          SUPABASE_URL: ${{ secrets.MLB_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MLB_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Missing MLB_SUPABASE_URL secret"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "Missing MLB_SUPABASE_SERVICE_ROLE_KEY secret"; exit 1; }
+
+      - name: Import completed games
+        env:
+          SUPABASE_URL: ${{ secrets.MLB_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MLB_SUPABASE_SERVICE_ROLE_KEY }}
+          MLB_SEASON: ${{ inputs.season }}
+        run: python mlb-v11/import_games.py "$MLB_SEASON"
+
+      - name: Validate imported season
+        env:
+          SUPABASE_URL: ${{ secrets.MLB_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MLB_SUPABASE_SERVICE_ROLE_KEY }}
+          MLB_SEASON: ${{ inputs.season }}
+        run: python mlb-v11/validate_import.py "$MLB_SEASON"
