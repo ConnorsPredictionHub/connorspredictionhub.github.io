@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MLB V1.1 Historical Import | Connor's Prediction Hub</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial;background:#0b1220;color:#eef5ff}
+body{margin:0}main{max-width:650px;margin:45px auto;padding:20px}
+.panel{background:#142239;border:1px solid #344c69;border-radius:14px;padding:24px}
+a{color:#8ed5ff}button,select{font:inherit;padding:12px;border-radius:9px}
+button{background:#e6b760;color:#15120c;border:0;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}select{background:#091a2e;color:#fff;border:1px solid #456}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0a1829;padding:15px;border-radius:8px;min-height:90px}
+</style></head><body><main><p><a href="./mlb.html">← MLB predictions</a></p>
+<div class="panel"><h1>MLB V1.1 · Historical import</h1>
+<p>Admin-only tool. Imports completed regular-season MLB scores directly into Supabase. Does not change existing predictions or bets.</p>
+<p id="auth">Checking your Prediction Hub login...</p>
+<label for="season">Season</label>
+<select id="season"><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option></select>
+<button id="run" disabled>IMPORT SELECTED SEASON</button>
+<pre id="log" aria-live="polite">Waiting for authentication.</pre></div></main>
+<script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const url='https://uvqbvqhkztdmdiayycuz.supabase.co';
+const key='sb_publishable_8ORcSlzgRyosS3U8_N8SmQ_lj5TT4OS';
+const db=createClient(url,key);
+const auth=document.getElementById('auth'),log=document.getElementById('log'),run=document.getElementById('run');
+async function getAdminSession(){
+ const {data:{session},error}=await db.auth.getSession();
+ if(error||!session){auth.textContent='Sign in to Prediction Hub first, then return to this page.';return null}
+ const {data:profile,error:profileError}=await db.from('profiles').select('role,approved').eq('id',session.user.id).single();
+ if(profileError||!profile?.approved||profile.role!=='admin'){auth.textContent='This import is restricted to approved administrators.';return null}
+ auth.textContent='Approved administrator · ready to import';return session;
+}
+let session=await getAdminSession();run.disabled=!session;
+run.onclick=async()=>{
+ if(!session)return;
+ run.disabled=true;
+ const season=Number(document.getElementById('season').value);
+ const months=[3,4,5,6,7,8,9,10,11];
+ let total=0;
+ log.textContent='Starting '+season+' import...\n';
+ try{
+  for(const month of months){
+   const {data:{session:latest}}=await db.auth.getSession();
+   if(!latest)throw Error('Your session expired. Please sign in again.');
+   const res=await fetch(url+'/functions/v1/mlb-v11-historical-import',{
+    method:'POST',headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+latest.access_token},
+    body:JSON.stringify({season,month})});
+   const result=await res.json();
+   if(!res.ok||!result.success)throw Error('Month '+month+': '+(result.error||'Unknown error')+(result.detail?' — '+result.detail:''));
+   total+=result.source_games;
+   log.textContent+='Month '+month+': '+result.source_games+' games; season stored '+result.season_stored+'\n';
+  }
+  log.textContent+='\nImport complete. '+total+' games processed.\n';
+ }catch(e){log.textContent+='\nStopped: '+e.message+'\nAlready imported months are retained; you can retry safely.'}
+ finally{run.disabled=false}
+};
+</script></body></html>
