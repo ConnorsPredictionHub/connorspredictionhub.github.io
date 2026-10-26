@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NHL Simulation Lab | Prediction Hub</title>
+<style>body{background:#08111f;color:#eef6ff;font:16px system-ui;margin:0}main{max-width:940px;margin:auto;padding:25px}a{color:#79d5ff}.panel{background:#142740;border:1px solid #29425e;border-radius:16px;padding:22px;margin:18px 0}label{display:block;margin:12px 0}input{background:#091a2e;border:1px solid #365676;border-radius:8px;padding:12px;color:white;width:160px;max-width:90%}button{background:#38bdf8;border:0;border-radius:9px;padding:13px 22px;font-weight:bold;cursor:pointer}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #365676;text-align:left}small,.muted{color:#a9bad1}h1{margin-bottom:4px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}</style></head>
+<body><main><a href="nhl.html">← NHL Dashboard</a><h1>NHL Simulation Lab · V1.0</h1>
+<p class="muted">Experimental regulation-time Monte Carlo model. No bets placed, no prediction saved, no bookmaker odds used.</p>
+<div class="panel"><h2>Matchup inputs</h2><p>Enter independently researched, opponent-adjusted expected goals (λ) for each team. These are not automatically sourced or calibrated.</p>
+<div class="grid"><label>Away team <input id="away" value="Away" maxlength="40"></label><label>Home team <input id="home" value="Home" maxlength="40"></label><label>Away expected goals <input id="la" type="number" min=".1" max="9" step=".05" value="2.8"></label><label>Home expected goals <input id="lh" type="number" min=".1" max="9" step=".05" value="3.1"></label></div>
+<button id="run">Run 50,000 simulations</button><p id="status" role="status"></p></div>
+<div class="panel" id="results" hidden><h2>Simulated outcomes</h2><p id="summary"></p><table><thead><tr><th>Market (regulation)</th><th>Probability</th><th>Fair odds</th></tr></thead><tbody id="rows"></tbody></table><p class="muted">Regulation only: no overtime/shootout, empty-net or scoring correlation adjustments. Independent Poisson goals can misrepresent tails and matchups. Simulation variation is approximately ±0.4 percentage points or less near 50% (95% Monte Carlo sampling interval); model error may be much larger. Do not use these probabilities for staking before historical calibration.</p></div>
+</main><script>
+const $=id=>document.getElementById(id);
+function poisson(lambda){let k=0,p=1,limit=Math.exp(-lambda);do{k++;p*=Math.random()}while(p>limit);return k-1}
+function fmt(p){return (p*100).toFixed(1)+'%'}
+function fair(p){return p>0?(1/p).toFixed(2):'—'}
+$('run').onclick=()=>{
+ const a=$('away').value.trim()||'Away',h=$('home').value.trim()||'Home',la=Number($('la').value),lh=Number($('lh').value);
+ if(!Number.isFinite(la)||!Number.isFinite(lh)||la<.1||lh<.1||la>9||lh>9||!$('la').value||!$('lh').value){$('status').textContent='Enter valid expected goals between 0.1 and 9 for both teams.';return}
+ const N=50000,c={aw:0,hw:0,tie:0,a2:0,a3:0,h2:0,h3:0,o45:0,o55:0,btts2:0},scores=new Map();
+ for(let i=0;i<N;i++){const x=poisson(la),y=poisson(lh);if(x>y)c.aw++;else if(y>x)c.hw++;else c.tie++;if(x>=2)c.a2++;if(x>=3)c.a3++;if(y>=2)c.h2++;if(y>=3)c.h3++;if(x+y>=5)c.o45++;if(x+y>=6)c.o55++;if(x>=2&&y>=2)c.btts2++;const key=x+'–'+y;scores.set(key,(scores.get(key)||0)+1)}
+ const markets=[[a+' regulation win','aw'],[h+' regulation win','hw'],['Regulation tie','tie'],[a+' 2+ goals','a2'],[a+' 3+ goals','a3'],[h+' 2+ goals','h2'],[h+' 3+ goals','h3'],['Over 4.5 total goals','o45'],['Over 5.5 total goals','o55'],['Both teams 2+ goals','btts2']];
+ const rows=$('rows');rows.replaceChildren();for(const [label,key] of markets){const tr=document.createElement('tr');for(const value of [label,fmt(c[key]/N),fair(c[key]/N)]){const td=document.createElement('td');td.textContent=value;tr.append(td)}rows.append(tr)}
+ const top=[...scores.entries()].sort((x,y)=>y[1]-x[1])[0];$('summary').textContent='Most frequent regulation score ('+a+'–'+h+'): '+top[0]+' ('+fmt(top[1]/N)+'). Expected goals: '+la.toFixed(2)+'–'+lh.toFixed(2)+'.';
+ $('results').hidden=false;$('status').textContent='50,000 simulations completed. Exploratory probabilities only.';
+};</script></body></html>
